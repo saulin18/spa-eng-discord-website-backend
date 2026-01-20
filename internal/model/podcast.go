@@ -28,6 +28,7 @@ type Podcast struct {
 	Country     string    `json:"country"`
 	Topic       string    `json:"topic"`
 	URL         string    `json:"url"`
+	Archived    bool      `json:"archived"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
@@ -55,8 +56,9 @@ type UpdatePodcastInput struct {
 }
 
 type PodcastFilters struct {
-	Language *Language `json:"language,omitempty"`
-	Level    *Level    `json:"level,omitempty"`
-	Country  *string   `json:"country,omitempty"`
-	Topic    *string   `json:"topic,omitempty"`
+	Language        *Language `json:"language,omitempty"`
+	Level           *Level    `json:"level,omitempty"`
+	Country         *string   `json:"country,omitempty"`
+	Topic           *string   `json:"topic,omitempty"`
+	IncludeArchived bool      `json:"includeArchived,omitempty"`
 }

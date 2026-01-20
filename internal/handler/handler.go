@@ -68,6 +68,8 @@ func (h *Handler) setupRoutes() {
 			r.Get("/{id}", h.podcasts.GetByID)
 			r.Patch("/{id}", h.podcasts.Update)
 			r.Delete("/{id}", h.podcasts.Delete)
+			r.Post("/{id}/archive", h.podcasts.Archive)
+			r.Post("/{id}/unarchive", h.podcasts.Unarchive)
 		})
 	})
 }

@@ -23,12 +23,20 @@ func NewPodcastRepository(pool *pgxpool.Pool) *PodcastRepository {
 
 func (r *PodcastRepository) GetAll(ctx context.Context, filters *model.PodcastFilters) ([]model.Podcast, error) {
 	query := `
-		SELECT id, title, description, image_url, language, level, country, topic, url, created_at, updated_at
+		SELECT id, title, description, image_url, language, level, country, topic, url, archived, created_at, updated_at
 		FROM podcasts
 		WHERE 1=1
 	`
 	args := []interface{}{}
 	argIndex := 1
+
+	// Filter out archived by default
+	includeArchived := filters != nil && filters.IncludeArchived
+	if !includeArchived {
+		query += fmt.Sprintf(" AND archived = $%d", argIndex)
+		args = append(args, false)
+		argIndex++
+	}
 
 	if filters != nil {
 		if filters.Language != nil {
@@ -67,7 +75,7 @@ func (r *PodcastRepository) GetAll(ctx context.Context, filters *model.PodcastFi
 		err := rows.Scan(
 			&p.ID, &p.Title, &p.Description, &p.ImageURL,
 			&p.Language, &p.Level, &p.Country, &p.Topic,
-			&p.URL, &p.CreatedAt, &p.UpdatedAt,
+			&p.URL, &p.Archived, &p.CreatedAt, &p.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan podcast: %w", err)
@@ -84,7 +92,7 @@ func (r *PodcastRepository) GetAll(ctx context.Context, filters *model.PodcastFi
 
 func (r *PodcastRepository) GetByID(ctx context.Context, id string) (*model.Podcast, error) {
 	query := `
-		SELECT id, title, description, image_url, language, level, country, topic, url, created_at, updated_at
+		SELECT id, title, description, image_url, language, level, country, topic, url, archived, created_at, updated_at
 		FROM podcasts
 		WHERE id = $1
 	`
@@ -93,7 +101,7 @@ func (r *PodcastRepository) GetByID(ctx context.Context, id string) (*model.Podc
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&p.ID, &p.Title, &p.Description, &p.ImageURL,
 		&p.Language, &p.Level, &p.Country, &p.Topic,
-		&p.URL, &p.CreatedAt, &p.UpdatedAt,
+		&p.URL, &p.Archived, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -109,7 +117,7 @@ func (r *PodcastRepository) Create(ctx context.Context, input *model.CreatePodca
 	query := `
 		INSERT INTO podcasts (title, description, image_url, language, level, country, topic, url)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, title, description, image_url, language, level, country, topic, url, created_at, updated_at
+		RETURNING id, title, description, image_url, language, level, country, topic, url, archived, created_at, updated_at
 	`
 
 	var p model.Podcast
@@ -119,7 +127,7 @@ func (r *PodcastRepository) Create(ctx context.Context, input *model.CreatePodca
 	).Scan(
 		&p.ID, &p.Title, &p.Description, &p.ImageURL,
 		&p.Language, &p.Level, &p.Country, &p.Topic,
-		&p.URL, &p.CreatedAt, &p.UpdatedAt,
+		&p.URL, &p.Archived, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create podcast: %w", err)
@@ -185,14 +193,14 @@ func (r *PodcastRepository) Update(ctx context.Context, id string, input *model.
 		UPDATE podcasts
 		SET %s
 		WHERE id = $%d
-		RETURNING id, title, description, image_url, language, level, country, topic, url, created_at, updated_at
+		RETURNING id, title, description, image_url, language, level, country, topic, url, archived, created_at, updated_at
 	`, strings.Join(setParts, ", "), argIndex)
 
 	var p model.Podcast
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&p.ID, &p.Title, &p.Description, &p.ImageURL,
 		&p.Language, &p.Level, &p.Country, &p.Topic,
-		&p.URL, &p.CreatedAt, &p.UpdatedAt,
+		&p.URL, &p.Archived, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -217,4 +225,28 @@ func (r *PodcastRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+func (r *PodcastRepository) Archive(ctx context.Context, id string, archived bool) (*model.Podcast, error) {
+	query := `
+		UPDATE podcasts
+		SET archived = $1, updated_at = NOW()
+		WHERE id = $2
+		RETURNING id, title, description, image_url, language, level, country, topic, url, archived, created_at, updated_at
+	`
+
+	var p model.Podcast
+	err := r.pool.QueryRow(ctx, query, archived, id).Scan(
+		&p.ID, &p.Title, &p.Description, &p.ImageURL,
+		&p.Language, &p.Level, &p.Country, &p.Topic,
+		&p.URL, &p.Archived, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to archive podcast: %w", err)
+	}
+
+	return &p, nil
 }

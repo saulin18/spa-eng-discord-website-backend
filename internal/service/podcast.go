@@ -50,3 +50,7 @@ func (s *PodcastService) Update(ctx context.Context, id string, input *model.Upd
 func (s *PodcastService) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
+
+func (s *PodcastService) Archive(ctx context.Context, id string, archived bool) (*model.Podcast, error) {
+	return s.repo.Archive(ctx, id, archived)
+}

@@ -29,7 +29,7 @@ func (h *PodcastHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	var filters *model.PodcastFilters
 	query := r.URL.Query()
 
-	if query.Has("language") || query.Has("level") || query.Has("country") || query.Has("topic") {
+	if query.Has("language") || query.Has("level") || query.Has("country") || query.Has("topic") || query.Has("includeArchived") {
 		filters = &model.PodcastFilters{}
 
 		if lang := query.Get("language"); lang != "" {
@@ -45,6 +45,9 @@ func (h *PodcastHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		}
 		if topic := query.Get("topic"); topic != "" {
 			filters.Topic = &topic
+		}
+		if query.Get("includeArchived") == "true" {
+			filters.IncludeArchived = true
 		}
 	}
 
@@ -139,6 +142,40 @@ func (h *PodcastHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *PodcastHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	podcast, err := h.service.Archive(ctx, id, true)
+	if err != nil {
+		if isNotFoundError(err) {
+			respondNotFound(w, "podcast")
+			return
+		}
+		respondInternalError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, podcast)
+}
+
+func (h *PodcastHandler) Unarchive(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	podcast, err := h.service.Archive(ctx, id, false)
+	if err != nil {
+		if isNotFoundError(err) {
+			respondNotFound(w, "podcast")
+			return
+		}
+		respondInternalError(w, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, podcast)
 }
 
 func formatValidationError(err error) string {
