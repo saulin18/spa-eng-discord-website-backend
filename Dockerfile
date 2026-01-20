@@ -1,47 +1,40 @@
 # Build stage
 FROM golang:1.22-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Install build dependencies
+# Install git for fetching dependencies
 RUN apk add --no-cache git ca-certificates
 
-# Copy go mod files first for better caching
+# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
+# Copy all source code
 COPY . .
 
-# Build binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server ./cmd/server
+# List files for debugging (remove later)
+RUN ls -la && ls -la cmd/ && ls -la cmd/server/
 
-# Final stage
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server ./cmd/server
+
+# Production stage
 FROM alpine:3.19
 
 WORKDIR /app
 
-# Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
 
 # Create non-root user
 RUN adduser -D -g '' appuser
 
-# Copy binary from builder
-COPY --from=builder /app/server .
+# Copy binary
+COPY --from=builder /build/server .
+COPY --from=builder /build/migrations ./migrations
 
-# Copy migrations (for reference/manual runs)
-COPY --from=builder /app/migrations ./migrations
-
-# Use non-root user
 USER appuser
 
-# Expose port (Railway uses PORT env var)
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/health || exit 1
-
-# Run server
 CMD ["./server"]
