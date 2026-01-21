@@ -15,9 +15,10 @@ import (
 )
 
 type Handler struct {
-	router   *chi.Mux
-	db       *database.DB
-	podcasts *PodcastHandler
+	router      *chi.Mux
+	db          *database.DB
+	podcasts    *PodcastHandler
+	linkReports *LinkReportHandler
 }
 
 func New(db *database.DB) *Handler {
@@ -28,12 +29,15 @@ func New(db *database.DB) *Handler {
 
 	// Initialize repositories
 	podcastRepo := repository.NewPodcastRepository(db.Pool)
+	linkReportRepo := repository.NewLinkReportRepository(db.Pool)
 
 	// Initialize services
 	podcastService := service.NewPodcastService(podcastRepo)
+	linkReportService := service.NewLinkReportService(linkReportRepo)
 
 	// Initialize handlers
 	h.podcasts = NewPodcastHandler(podcastService)
+	h.linkReports = NewLinkReportHandler(linkReportService)
 
 	h.setupMiddleware()
 	h.setupRoutes()
@@ -70,6 +74,14 @@ func (h *Handler) setupRoutes() {
 			r.Delete("/{id}", h.podcasts.Delete)
 			r.Post("/{id}/archive", h.podcasts.Archive)
 			r.Post("/{id}/unarchive", h.podcasts.Unarchive)
+			r.Post("/{id}/report", h.linkReports.Report)
+			r.Get("/{id}/reports", h.linkReports.GetByPodcast)
+			r.Get("/{id}/reports/count", h.linkReports.GetCount)
+			r.Delete("/{id}/reports", h.linkReports.ClearReports)
+		})
+
+		r.Route("/link-reports", func(r chi.Router) {
+			r.Get("/counts", h.linkReports.GetAllCounts)
 		})
 	})
 }
