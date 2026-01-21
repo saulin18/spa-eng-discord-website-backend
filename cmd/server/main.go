@@ -32,6 +32,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Run database migrations
+	if err := database.RunMigrations(cfg.DatabaseURL); err != nil {
+		slog.Error("failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+
 	// Connect to database
 	slog.Info("connecting to database")
 	db, err := database.Connect(ctx, cfg.DatabaseURL)
