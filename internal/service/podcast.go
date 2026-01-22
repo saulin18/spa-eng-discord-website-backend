@@ -5,6 +5,7 @@ import (
 
 	"github.com/spanish-english-discord/api/internal/model"
 	"github.com/spanish-english-discord/api/internal/repository"
+	"github.com/spanish-english-discord/api/internal/shared"
 )
 
 type PodcastService struct {
@@ -15,10 +16,10 @@ func NewPodcastService(repo *repository.PodcastRepository) *PodcastService {
 	return &PodcastService{repo: repo}
 }
 
-func (s *PodcastService) GetAll(ctx context.Context, filters *model.PodcastFilters) ([]model.Podcast, error) {
-	podcasts, err := s.repo.GetAll(ctx, filters)
+func (s *PodcastService) GetAll(ctx context.Context, filters *model.PodcastFilters) ([]model.Podcast, shared.OffsetPaginationResult, error) {
+	podcasts, pagination, err := s.repo.GetAll(ctx, filters)
 	if err != nil {
-		return nil, err
+		return nil, shared.OffsetPaginationResult{}, err
 	}
 
 	// Return empty slice instead of nil for JSON serialization
@@ -26,7 +27,7 @@ func (s *PodcastService) GetAll(ctx context.Context, filters *model.PodcastFilte
 		podcasts = []model.Podcast{}
 	}
 
-	return podcasts, nil
+	return podcasts, pagination, nil
 }
 
 func (s *PodcastService) GetByID(ctx context.Context, id string) (*model.Podcast, error) {

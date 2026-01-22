@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spanish-english-discord/api/internal/model"
+	"github.com/spanish-english-discord/api/internal/shared"
 )
-
-var ErrNotFound = errors.New("resource not found")
 
 type PodcastRepository struct {
 	pool *pgxpool.Pool
@@ -21,55 +19,89 @@ func NewPodcastRepository(pool *pgxpool.Pool) *PodcastRepository {
 	return &PodcastRepository{pool: pool}
 }
 
-func (r *PodcastRepository) GetAll(ctx context.Context, filters *model.PodcastFilters) ([]model.Podcast, error) {
+func (r *PodcastRepository) GetAll(ctx context.Context, filters *model.PodcastFilters) ([]model.Podcast, shared.OffsetPaginationResult, error) {
+
 	query := `
-		SELECT id, title, description, image_url, language, level, country, topic, url, archived, created_at, updated_at
+		SELECT id, title, description, image_url, language, level, country, topic, url, archived, created_at, 
+		updated_at
 		FROM podcasts
 		WHERE 1=1
 	`
+
+	whereClause := ""
 	args := []interface{}{}
 	argIndex := 1
 
-	// Filter out archived by default
+	page := 1
+	pageSize := 0
+	offset := 0
+	limit := 0
+
+	if filters != nil {
+		if filters.Page != nil && *filters.Page > 0 {
+			page = *filters.Page
+		}
+		if filters.PageSize != nil && *filters.PageSize > 0 {
+			pageSize = *filters.PageSize
+			limit = pageSize
+			offset = (page - 1) * pageSize
+		}
+	}
+
 	includeArchived := filters != nil && filters.IncludeArchived
 	if !includeArchived {
-		query += fmt.Sprintf(" AND archived = $%d", argIndex)
+		whereClause += fmt.Sprintf(" AND archived = $%d", argIndex)
 		args = append(args, false)
 		argIndex++
 	}
 
+	filtersMap := map[string]interface{}{}
 	if filters != nil {
 		if filters.Language != nil {
-			query += fmt.Sprintf(" AND language = $%d", argIndex)
-			args = append(args, *filters.Language)
-			argIndex++
+			filtersMap["language"] = *filters.Language
 		}
 		if filters.Level != nil {
-			query += fmt.Sprintf(" AND level = $%d", argIndex)
-			args = append(args, *filters.Level)
-			argIndex++
+			filtersMap["level"] = *filters.Level
 		}
 		if filters.Country != nil {
-			query += fmt.Sprintf(" AND country = $%d", argIndex)
-			args = append(args, *filters.Country)
-			argIndex++
+			filtersMap["country"] = *filters.Country
 		}
 		if filters.Topic != nil {
-			query += fmt.Sprintf(" AND topic = $%d", argIndex)
-			args = append(args, *filters.Topic)
-			argIndex++
+			filtersMap["topic"] = *filters.Topic
 		}
+
+		qb := shared.NewQueryBuilder()
+		whereClause += qb.BuildFilters(filtersMap, &argIndex, &args)
+	}
+
+	query += whereClause
+
+	countQuery := fmt.Sprintf(`
+	SELECT COUNT(*) FROM podcasts WHERE 1=1 %s
+	`, whereClause)
+
+
+	var totalCount int
+	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount)
+	if err != nil {
+		return nil, shared.OffsetPaginationResult{}, fmt.Errorf("failed to count podcasts: %w", err)
 	}
 
 	query += " ORDER BY created_at DESC"
 
+	if limit > 0 || offset > 0 {
+		qb := shared.NewQueryBuilder()
+		query += qb.BuildOffsetPagination(offset, limit, &argIndex, &args)
+	}
+
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query podcasts: %w", err)
+		return nil, shared.OffsetPaginationResult{}, fmt.Errorf("failed to query podcasts: %w", err)
 	}
 	defer rows.Close()
 
 	var podcasts []model.Podcast
+
 	for rows.Next() {
 		var p model.Podcast
 		err := rows.Scan(
@@ -78,16 +110,30 @@ func (r *PodcastRepository) GetAll(ctx context.Context, filters *model.PodcastFi
 			&p.URL, &p.Archived, &p.CreatedAt, &p.UpdatedAt,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan podcast: %w", err)
+			return nil, shared.OffsetPaginationResult{}, fmt.Errorf("failed to scan podcast: %w", err)
 		}
 		podcasts = append(podcasts, p)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating podcasts: %w", err)
+		return nil, shared.OffsetPaginationResult{}, fmt.Errorf("error iterating podcasts: %w", err)
 	}
 
-	return podcasts, nil
+	totalPages := 0
+	if pageSize > 0 && totalCount > 0 {
+		totalPages = totalCount / pageSize
+		if totalCount%pageSize != 0 {
+			totalPages++
+		}
+	}
+
+	paginationResult := shared.OffsetPaginationResult{
+		TotalCount:  totalCount,
+		TotalPages:  totalPages,
+		CurrentPage: page,
+	}
+
+	return podcasts, paginationResult, nil
 }
 
 func (r *PodcastRepository) GetByID(ctx context.Context, id string) (*model.Podcast, error) {
@@ -105,7 +151,7 @@ func (r *PodcastRepository) GetByID(ctx context.Context, id string) (*model.Podc
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, shared.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get podcast: %w", err)
 	}
@@ -137,64 +183,55 @@ func (r *PodcastRepository) Create(ctx context.Context, input *model.CreatePodca
 }
 
 func (r *PodcastRepository) Update(ctx context.Context, id string, input *model.UpdatePodcastInput) (*model.Podcast, error) {
-	setParts := []string{}
 	args := []interface{}{}
 	argIndex := 1
 
-	if input.Title != nil {
-		setParts = append(setParts, fmt.Sprintf("title = $%d", argIndex))
-		args = append(args, *input.Title)
-		argIndex++
-	}
-	if input.Description != nil {
-		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
-		args = append(args, *input.Description)
-		argIndex++
-	}
-	if input.ImageURL != nil {
-		setParts = append(setParts, fmt.Sprintf("image_url = $%d", argIndex))
-		args = append(args, *input.ImageURL)
-		argIndex++
-	}
-	if input.Language != nil {
-		setParts = append(setParts, fmt.Sprintf("language = $%d", argIndex))
-		args = append(args, *input.Language)
-		argIndex++
-	}
-	if input.Level != nil {
-		setParts = append(setParts, fmt.Sprintf("level = $%d", argIndex))
-		args = append(args, *input.Level)
-		argIndex++
-	}
-	if input.Country != nil {
-		setParts = append(setParts, fmt.Sprintf("country = $%d", argIndex))
-		args = append(args, *input.Country)
-		argIndex++
-	}
-	if input.Topic != nil {
-		setParts = append(setParts, fmt.Sprintf("topic = $%d", argIndex))
-		args = append(args, *input.Topic)
-		argIndex++
-	}
-	if input.URL != nil {
-		setParts = append(setParts, fmt.Sprintf("url = $%d", argIndex))
-		args = append(args, *input.URL)
-		argIndex++
+	fieldMap := map[string]interface{}{}
+
+	if input != nil {
+		if input.Title != nil {
+			fieldMap["title"] = *input.Title
+		}
+		if input.Description != nil {
+			fieldMap["description"] = *input.Description
+		}
+		if input.ImageURL != nil {
+			fieldMap["image_url"] = *input.ImageURL
+		}
+		if input.Language != nil {
+			fieldMap["language"] = *input.Language
+		}
+		if input.Level != nil {
+			fieldMap["level"] = *input.Level
+		}
+		if input.Country != nil {
+			fieldMap["country"] = *input.Country
+		}
+		if input.Topic != nil {
+			fieldMap["topic"] = *input.Topic
+		}
+		if input.URL != nil {
+			fieldMap["url"] = *input.URL
+		}
 	}
 
-	if len(setParts) == 0 {
+	if len(fieldMap) == 0 {
 		return r.GetByID(ctx, id)
 	}
 
-	setParts = append(setParts, "updated_at = NOW()")
+	qb := shared.NewQueryBuilder()
+	setClause := qb.BuildUpdates(fieldMap, &argIndex, &args)
+
+	setClause += ", updated_at = NOW()"
 	args = append(args, id)
+	whereArgIndex := argIndex
 
 	query := fmt.Sprintf(`
 		UPDATE podcasts
 		SET %s
 		WHERE id = $%d
 		RETURNING id, title, description, image_url, language, level, country, topic, url, archived, created_at, updated_at
-	`, strings.Join(setParts, ", "), argIndex)
+		`, setClause, whereArgIndex)
 
 	var p model.Podcast
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
@@ -204,7 +241,7 @@ func (r *PodcastRepository) Update(ctx context.Context, id string, input *model.
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, shared.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to update podcast: %w", err)
 	}
@@ -221,7 +258,7 @@ func (r *PodcastRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrNotFound
+		return shared.ErrNotFound
 	}
 
 	return nil
@@ -243,7 +280,7 @@ func (r *PodcastRepository) Archive(ctx context.Context, id string, archived boo
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, shared.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to archive podcast: %w", err)
 	}

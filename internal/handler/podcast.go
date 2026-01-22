@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -25,11 +26,14 @@ func NewPodcastHandler(service *service.PodcastService) *PodcastHandler {
 func (h *PodcastHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Parse query params for filters
+	// Parse query params for filters and pagination
 	var filters *model.PodcastFilters
 	query := r.URL.Query()
 
-	if query.Has("language") || query.Has("level") || query.Has("country") || query.Has("topic") || query.Has("includeArchived") {
+	hasFilters := query.Has("language") || query.Has("level") || query.Has("country") || query.Has("topic") || query.Has("includeArchived")
+	hasPagination := query.Has("page") || query.Has("pageSize")
+
+	if hasFilters || hasPagination {
 		filters = &model.PodcastFilters{}
 
 		if lang := query.Get("language"); lang != "" {
@@ -49,15 +53,32 @@ func (h *PodcastHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		if query.Get("includeArchived") == "true" {
 			filters.IncludeArchived = true
 		}
+
+		if pageStr := query.Get("page"); pageStr != "" {
+			if page, err := strconv.Atoi(pageStr); err == nil && page > 0 {
+				filters.Page = &page
+			}
+		}
+		if pageSizeStr := query.Get("pageSize"); pageSizeStr != "" {
+			if pageSize, err := strconv.Atoi(pageSizeStr); err == nil && pageSize > 0 {
+				filters.PageSize = &pageSize
+			}
+		}
 	}
 
-	podcasts, err := h.service.GetAll(ctx, filters)
+	podcasts, pagination, err := h.service.GetAll(ctx, filters)
 	if err != nil {
 		respondInternalError(w, err)
 		return
 	}
 
-	respondJSON(w, http.StatusOK, podcasts)
+	// Return response with pagination metadata
+	response := map[string]interface{}{
+		"items":      podcasts,
+		"pagination": pagination,
+	}
+
+	respondJSON(w, http.StatusOK, response)
 }
 
 func (h *PodcastHandler) GetByID(w http.ResponseWriter, r *http.Request) {
