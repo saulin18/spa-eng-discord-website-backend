@@ -3,5 +3,6 @@ package shared
 import "errors"
 
 var (
-	ErrNotFound = errors.New("resource not found")
+	PodcastNotFound = errors.New("podcast not found")
+	LinkReportNotFound = errors.New("link report not found")
 )

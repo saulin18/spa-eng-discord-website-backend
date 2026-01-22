@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spanish-english-discord/api/internal/model"
+	"github.com/spanish-english-discord/api/internal/shared"
 )
 
 type LinkReportRepository struct {
@@ -121,7 +121,7 @@ func (r *LinkReportRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrNotFound
+		return shared.LinkReportNotFound
 	}
 
 	return nil

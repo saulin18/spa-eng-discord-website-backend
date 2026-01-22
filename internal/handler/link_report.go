@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spanish-english-discord/api/internal/service"
+	"github.com/spanish-english-discord/api/internal/shared"
 )
 
 type LinkReportHandler struct {
@@ -26,7 +26,7 @@ func (h *LinkReportHandler) Report(w http.ResponseWriter, r *http.Request) {
 
 	report, err := h.service.Report(ctx, podcastID, ip)
 	if err != nil {
-		if errors.Is(err, service.ErrPodcastNotFound) {
+		if isNotFoundError(err) {
 			respondNotFound(w, "podcast")
 			return
 		}

@@ -142,5 +142,5 @@ func respondInternalError(w http.ResponseWriter, err error) {
 }
 
 func isNotFoundError(err error) bool {
-	return errors.Is(err, shared.ErrNotFound)
+	return errors.Is(err, shared.PodcastNotFound) || errors.Is(err, shared.LinkReportNotFound)
 }

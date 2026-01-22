@@ -151,7 +151,7 @@ func (r *PodcastRepository) GetByID(ctx context.Context, id string) (*model.Podc
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, shared.ErrNotFound
+			return nil, shared.PodcastNotFound
 		}
 		return nil, fmt.Errorf("failed to get podcast: %w", err)
 	}
@@ -241,7 +241,7 @@ func (r *PodcastRepository) Update(ctx context.Context, id string, input *model.
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, shared.ErrNotFound
+			return nil, shared.PodcastNotFound
 		}
 		return nil, fmt.Errorf("failed to update podcast: %w", err)
 	}
@@ -258,7 +258,7 @@ func (r *PodcastRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	if result.RowsAffected() == 0 {
-		return shared.ErrNotFound
+		return shared.PodcastNotFound
 	}
 
 	return nil
@@ -280,7 +280,7 @@ func (r *PodcastRepository) Archive(ctx context.Context, id string, archived boo
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, shared.ErrNotFound
+			return nil, shared.PodcastNotFound
 		}
 		return nil, fmt.Errorf("failed to archive podcast: %w", err)
 	}
