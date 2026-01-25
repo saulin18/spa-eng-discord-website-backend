@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spanish-english-discord/api/internal/service"
-	"github.com/spanish-english-discord/api/internal/shared"
 )
 
 type LinkReportHandler struct {

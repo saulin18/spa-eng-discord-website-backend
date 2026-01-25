@@ -2,6 +2,7 @@ package shared
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -22,8 +23,14 @@ func NewQueryBuilder() *QueryBuilder {
 * Appends the values to the provided args slice and updates the argIndex accordingly.
  */
 func (qb *QueryBuilder) BuildFilters(fieldMap map[string]interface{}, argIndex *int, args *[]interface{}) string {
-	for field, value := range fieldMap {
-		if value != nil {
+	keys := make([]string, 0, len(fieldMap))
+	for field := range fieldMap {
+		keys = append(keys, field)
+	}
+	sort.Strings(keys)
+
+	for _, field := range keys {
+		if value := fieldMap[field]; value != nil {
 			fmt.Fprintf(qb.builder, " AND %s = $%d", field, *argIndex)
 			*args = append(*args, value)
 			*argIndex++
@@ -38,9 +45,15 @@ func (qb *QueryBuilder) BuildFilters(fieldMap map[string]interface{}, argIndex *
 * Returns the SET clause as a string.
  */
 func (qb *QueryBuilder) BuildUpdates(fieldMap map[string]interface{}, argIndex *int, args *[]interface{}) string {
+	keys := make([]string, 0, len(fieldMap))
+	for field := range fieldMap {
+		keys = append(keys, field)
+	}
+	sort.Strings(keys)
+
 	var setParts []string
-	for field, value := range fieldMap {
-		if value != nil {
+	for _, field := range keys {
+		if value := fieldMap[field]; value != nil {
 			setParts = append(setParts, fmt.Sprintf("%s = $%d", field, *argIndex))
 			*args = append(*args, value)
 			*argIndex++

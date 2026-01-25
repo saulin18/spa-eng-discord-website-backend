@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -34,7 +35,10 @@ func Load() (*Config, error) {
 		user := getEnvVar("DB_USER", "postgres")
 		password := getEnvVar("DB_PASSWORD", "")
 		dbname := getEnvVar("DB_NAME", "discord_resources")
-		sslmode := getEnvVar("DB_SSLMODE", "disable")
+		sslmode := getEnvVar("DB_SSLMODE", "require")
+		if sslmode == "disable" {
+			log.Println("Warning: Database SSL mode is disabled")
+		}
 
 		cfg.DatabaseURL = fmt.Sprintf(
 			"postgres://%s:%s@%s:%s/%s?sslmode=%s",
@@ -58,20 +62,16 @@ func (c *Config) IsProduction() bool {
 * If the variable is not set, it sets it to the provided default value.
  */
 func getEnvVar(key string, defaultValue ...string) string {
-
 	value := os.Getenv(key)
-
 	if value != "" {
 		return value
 	}
 
-	def := ""
 	if len(defaultValue) > 0 {
-		def = defaultValue[0]
-		fmt.Printf("Set default value of environment variable `%s`: %s\n", key, def)
-		return def
+		log.Printf("Using default value for environment variable: %s", key)
+		return defaultValue[0]
 	}
 
-	fmt.Printf("Not found value of environment variable `%s`\n", key)
+	log.Printf("Environment variable not set: %s", key)
 	return ""
 }

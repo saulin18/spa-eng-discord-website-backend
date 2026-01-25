@@ -45,6 +45,9 @@ func (r *PodcastRepository) GetAll(ctx context.Context, filters *model.PodcastFi
 			pageSize = *filters.PageSize
 			limit = pageSize
 			offset = (page - 1) * pageSize
+		} else {
+			// Reset page to 1 if no pageSize provided to avoid misleading metadata
+			page = 1
 		}
 	}
 
