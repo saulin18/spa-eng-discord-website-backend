@@ -12,6 +12,7 @@ import (
 	"github.com/spanish-english-discord/api/internal/database"
 	"github.com/spanish-english-discord/api/internal/repository"
 	"github.com/spanish-english-discord/api/internal/service"
+	"github.com/spanish-english-discord/api/internal/shared"
 )
 
 type Handler struct {
@@ -141,5 +142,5 @@ func respondInternalError(w http.ResponseWriter, err error) {
 }
 
 func isNotFoundError(err error) bool {
-	return errors.Is(err, repository.ErrNotFound)
+	return errors.Is(err, shared.PodcastNotFound) || errors.Is(err, shared.LinkReportNotFound)
 }

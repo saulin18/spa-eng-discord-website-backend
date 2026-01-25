@@ -2,13 +2,11 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/spanish-english-discord/api/internal/model"
 	"github.com/spanish-english-discord/api/internal/repository"
+	"github.com/spanish-english-discord/api/internal/shared"
 )
-
-var ErrPodcastNotFound = errors.New("podcast not found")
 
 type LinkReportService struct {
 	repo *repository.LinkReportRepository
@@ -25,7 +23,7 @@ func (s *LinkReportService) Report(ctx context.Context, podcastID string, report
 		return nil, err
 	}
 	if !exists {
-		return nil, ErrPodcastNotFound
+		return nil, shared.PodcastNotFound
 	}
 
 	return s.repo.Create(ctx, podcastID, reporterIP)

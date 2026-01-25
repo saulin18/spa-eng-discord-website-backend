@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -26,7 +25,7 @@ func (h *LinkReportHandler) Report(w http.ResponseWriter, r *http.Request) {
 
 	report, err := h.service.Report(ctx, podcastID, ip)
 	if err != nil {
-		if errors.Is(err, service.ErrPodcastNotFound) {
+		if isNotFoundError(err) {
 			respondNotFound(w, "podcast")
 			return
 		}

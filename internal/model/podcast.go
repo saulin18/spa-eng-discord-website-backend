@@ -61,4 +61,6 @@ type PodcastFilters struct {
 	Country         *string   `json:"country,omitempty"`
 	Topic           *string   `json:"topic,omitempty"`
 	IncludeArchived bool      `json:"includeArchived,omitempty"`
+	Page            *int      `json:"page,omitempty"`     
+	PageSize        *int      `json:"pageSize,omitempty"` 
 }
